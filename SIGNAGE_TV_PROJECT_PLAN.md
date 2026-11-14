@@ -2,8 +2,21 @@
 
 **Phiên bản:** 1.0  
 **Ngày:** 13/11/2026  
-**Trạng thái:** Planning; chưa thiết kế giao diện, chưa triển khai ứng dụng.  
+**Trạng thái:** Đã bắt đầu triển khai bản XLC một nhà hàng theo thay đổi phạm vi ngày 13/11/2026.
 **Mục đích:** Đưa vào thư mục project hoặc upload vào ChatGPT Project để làm tài liệu yêu cầu và đầu vào cho lập trình viên/AI.
+
+## 0. Phạm vi triển khai hiện tại — cập nhật 13/11/2026
+
+Yêu cầu mới nhất của chủ dự án **ưu tiên hơn** các yêu cầu nhiều người dùng và trạng thái planning trong phần kế hoạch ban đầu bên dưới.
+
+- Bắt đầu xây dựng ứng dụng cho **một nhà hàng XLC — Xôi Lá Chuối**.
+- `/manage` dùng **một PIN chung**. PIN được cấu hình ở server; giá trị ban đầu theo yêu cầu là `4321`.
+- **Hoãn multi-user, Supabase Auth, membership, Owner/Editor và database nhiều người dùng.** Đây vẫn là hướng mở rộng sau.
+- Thực hiện quản lý TV, upload ảnh, playlist, xoay, hướng treo, contain/cover, tổng quan và preview riêng.
+- **TV chỉ nhận cập nhật khi khách reload browser.** Không polling, realtime, heartbeat hoặc tự refresh.
+- Dữ liệu local lưu server-side dưới `.signage-data`, không lưu riêng trong localStorage từng máy.
+- Chuẩn bị adapter Vercel Blob: private store cho JSON cấu hình, public store cho ảnh; chưa cần database. Cần cấu hình credential và kiểm thử cloud trước khi deploy sử dụng thật.
+- Xem `README.md` để chạy ứng dụng, vận hành và mở rộng. Phần 1–22 bên dưới giữ lại làm kế hoạch dài hạn; chưa đánh dấu các milestone nhiều người dùng là đã hoàn thành.
 
 ## 1. Mục tiêu sản phẩm
 
