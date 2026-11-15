@@ -21,12 +21,22 @@ function parseState(raw: string): State {
     throw new Error("Invalid signage state; restore the data backup.");
   return state;
 }
-async function readSnapshot(): Promise<{ state: State; etag?: string }> {
+async function readSnapshot(requireStrongEtag = false): Promise<{ state: State; etag?: string }> {
   if (storageDriver() === "blob") {
-    const result = await get(configPath, { access: "private", token: process.env.CONFIG_BLOB_READ_WRITE_TOKEN, useCache: false });
+    const result = await get(configPath, { access: "private", token: process.env.CONFIG_BLOB_READ_WRITE_TOKEN, useCache: false,
+      // Conditional writes need the original object's strong ETag. Compression
+      // can turn a response ETag into a weak validator that cannot match a PUT.
+      headers: { "Accept-Encoding": "identity", "Cache-Control": "no-cache" } });
     if (!result) return { state: initialState() };
     if (!result.stream) throw new Error("Missing config content");
-    return { state: parseState(await new Response(result.stream).text()), etag: result.blob.etag };
+    const etag = result.blob.etag;
+    if (requireStrongEtag && (!etag || etag.startsWith("W/"))) {
+      await result.stream.cancel();
+      console.error("Signage config invalid ETag", { kind: etag ? "weak" : "missing",
+        encoding: result.headers.get("content-encoding") });
+      throw new AppError(503, "Không đọc được phiên bản cấu hình hợp lệ từ kho lưu trữ. Vui lòng thử lại sau.");
+    }
+    return { state: parseState(await new Response(result.stream).text()), etag };
   }
   try { return { state: parseState(await readFile(path.join(dataDir(), "settings.json"), "utf8")) }; }
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return { state: initialState() }; throw error; }
@@ -36,7 +46,7 @@ const locks = globalThis as typeof globalThis & { signageWriteQueue?: Promise<un
 export async function mutateState<T>(change: (state: State) => T): Promise<T> {
   if (storageDriver() === "blob") {
     for (let attempt = 0; attempt < 5; attempt++) {
-      const { state, etag } = await readSnapshot();
+      const { state, etag } = await readSnapshot(true);
       const result = change(state);
       try {
         await put(configPath, JSON.stringify(state), { access: "private", token: process.env.CONFIG_BLOB_READ_WRITE_TOKEN,
@@ -44,11 +54,15 @@ export async function mutateState<T>(change: (state: State) => T): Promise<T> {
         return result;
       } catch (error) {
         // A competing first write or conditional write must be reread before retrying.
-        if (error instanceof BlobPreconditionFailedError || (!etag && /already exists/i.test(String(error)))) continue;
+        if (error instanceof BlobPreconditionFailedError || (!etag && /already exists/i.test(String(error)))) {
+          console.warn("Signage config write conflict", { attempt: attempt + 1, existing: Boolean(etag),
+            reason: error instanceof BlobPreconditionFailedError ? "etag_mismatch" : "already_exists" });
+          continue;
+        }
         throw error;
       }
     }
-    throw new AppError(409, "Có thay đổi khác vừa được lưu. Vui lòng tải lại và thử lại.");
+    throw new AppError(409, "Kho cấu hình liên tục báo xung đột phiên bản. Thay đổi chưa được lưu; vui lòng thử lại hoặc kiểm tra log hệ thống.");
   }
   const run = (locks.signageWriteQueue || Promise.resolve()).catch(() => {}).then(async () => {
     const { state } = await readSnapshot();
